@@ -7,7 +7,7 @@ from io import BytesIO
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-UPLOAD_FOLDER = 'qr_vcard_web/static'
+UPLOAD_FOLDER = 'static'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def create_vcard(data, photo_b64=None):
@@ -17,32 +17,30 @@ def create_vcard(data, photo_b64=None):
     vcard += f"TEL:{data['phone']}\n"
     vcard += f"EMAIL:{data['email']}\n"
     vcard += f"ORG:{data['org']}\n"
-
-    if data.get('title'):
+    if data.get("title"):
         vcard += f"TITLE:{data['title']}\n"
-    if data.get('address'):
+    if data.get("address"):
         vcard += f"ADR:{data['address']}\n"
-    if data.get('website'):
+    if data.get("website"):
         vcard += f"URL:{data['website']}\n"
     if photo_b64:
         vcard += f"PHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}\n"
-
     vcard += "END:VCARD"
     return vcard
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/", methods=["GET", "POST"])
 def index():
-    if request.method == 'POST':
+    if request.method == "POST":
         form = request.form
-        first_name = form.get('first_name', '').strip()
-        phone = form.get('phone', '').strip()
-        email = form.get('email', '').strip()
-        org = form.get('org', '').strip()
+        first_name = form.get("first_name", "").strip()
+        phone = form.get("phone", "").strip()
+        email = form.get("email", "").strip()
+        org = form.get("org", "").strip()
 
         if not all([first_name, phone, email, org]):
-            return "Tên, điện thoại, email và công ty là bắt buộc.", 400
+            return "Tên, số điện thoại, email và công ty là bắt buộc.", 400
 
-        photo_file = request.files.get('photo')
+        photo_file = request.files.get("photo")
         photo_b64 = None
         if photo_file and photo_file.filename:
             image = Image.open(photo_file)
@@ -50,10 +48,10 @@ def index():
             image.thumbnail((300, 300))
             buffer = BytesIO()
             image.save(buffer, format="JPEG")
-            photo_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            photo_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
         vcard_full = create_vcard(form, photo_b64)
-        vcard_short = create_vcard(form)  # Không ảnh để QR không quá dài
+        vcard_short = create_vcard(form)
 
         filename_base = secure_filename(first_name.lower().replace(" ", "_"))
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -63,9 +61,9 @@ def index():
         with open(vcf_path, "w", encoding="utf-8") as f:
             f.write(vcard_full)
 
-        qr = qrcode.make(vcard_short)
         qr_filename = f"{filename_base}_qr.png"
         qr_path = os.path.join(app.config['UPLOAD_FOLDER'], qr_filename)
+        qr = qrcode.make(vcard_short)
         qr.save(qr_path)
 
         return render_template("index.html",
@@ -86,6 +84,6 @@ def download_vcf():
     filename = request.args.get("filename")
     return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(debug=True, host="0.0.0.0", port=port)

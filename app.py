@@ -14,9 +14,12 @@ def create_vcard(data, photo_b64=None):
     vcard = "BEGIN:VCARD\nVERSION:3.0\n"
     vcard += f"N:{data.get('last_name', '')};{data['first_name']}\n"
     vcard += f"FN:{data['first_name']} {data.get('last_name', '')}\n"
-    vcard += f"TEL:{data['phone']}\n"
-    vcard += f"EMAIL:{data['email']}\n"
-    vcard += f"ORG:{data['org']}\n"
+    if data.get("phone"):
+        vcard += f"TEL:{data['phone']}\n"
+    if data.get("email"):
+        vcard += f"EMAIL:{data['email']}\n"
+    if data.get("org"):
+        vcard += f"ORG:{data['org']}\n"
     if data.get("title"):
         vcard += f"TITLE:{data['title']}\n"
     if data.get("address"):
@@ -33,12 +36,8 @@ def index():
     if request.method == "POST":
         form = request.form
         first_name = form.get("first_name", "").strip()
-        phone = form.get("phone", "").strip()
-        email = form.get("email", "").strip()
-        org = form.get("org", "").strip()
-
-        if not all([first_name, phone, email, org]):
-            return "Tên, số điện thoại, email và công ty là bắt buộc.", 400
+        if not first_name:
+            return "Trường tên là bắt buộc.", 400
 
         photo_file = request.files.get("photo")
         photo_b64 = None

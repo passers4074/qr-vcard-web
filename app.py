@@ -18,7 +18,7 @@ def image_to_base64(image_file, max_width=240, max_height=240):
     img.save(buffered, format="JPEG", optimize=True, quality=70)
     return base64.b64encode(buffered.getvalue()).decode()
 
-def generate_vcard(first_name, last_name, phone, email, org, title, address, photo_b64=None, for_qr=False):
+def generate_vcard(first_name, last_name, phone, email, org, title, address, website, photo_b64=None, for_qr=False):
     vcard = f"""BEGIN:VCARD
 VERSION:3.0
 N:{last_name};{first_name};;;
@@ -28,9 +28,11 @@ TITLE:{title}
 TEL;TYPE=CELL:{phone}
 EMAIL:{email}
 ADR;TYPE=WORK:;;{address}"""
+    if website:
+        vcard += f"\\nURL:{website}"
     if photo_b64 and not for_qr:
-        vcard += f"\nPHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}"
-    vcard += "\nEND:VCARD"
+        vcard += f"\\nPHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}"
+    vcard += "\\nEND:VCARD"
     return vcard
 
 @app.route('/', methods=['GET', 'POST'])
@@ -43,6 +45,7 @@ def index():
         org = request.form['org']
         title = request.form['title']
         address = request.form['address']
+        website = request.form['website']
         photo_file = request.files.get('photo')
 
         photo_b64 = ''
@@ -59,8 +62,7 @@ def index():
         qr_path = os.path.join(UPLOAD_FOLDER, qr_filename)
         vcf_path = os.path.join(UPLOAD_FOLDER, vcf_filename)
 
-        # QR không chứa ảnh
-        vcard_for_qr = generate_vcard(first_name, last_name, phone, email, org, title, address, None, for_qr=True)
+        vcard_for_qr = generate_vcard(first_name, last_name, phone, email, org, title, address, website, None, for_qr=True)
         qr = qrcode.QRCode(
             version=None,
             error_correction=ERROR_CORRECT_M,
@@ -72,10 +74,9 @@ def index():
         img = qr.make_image(fill_color="black", back_color="white")
         img.save(qr_path)
 
-        # VCF có ảnh đầy đủ
-        vcard_with_photo = generate_vcard(first_name, last_name, phone, email, org, title, address, photo_b64)
+        vcard_with_photo = generate_vcard(first_name, last_name, phone, email, org, title, address, website, photo_b64)
         with open(vcf_path, 'w', encoding='utf-8') as f:
-            f.write(vcard_with_photo.replace("\n", "\r\n"))
+            f.write(vcard_with_photo.replace("\\n", "\\r\\n"))
 
         return render_template('index.html', qr_path=qr_path, vcf_path=vcf_path, qr_generated=True,
                                qr_filename=qr_filename, vcf_filename=vcf_filename)

@@ -7,27 +7,28 @@
     </head>
     <body class="bg-light">
         <div class="container mt-5">
-            <h2 class="text-center mb-4">Tạo mã QR danh bạ (vCard có ảnh)</h2>
+            <h2 class="text-center mb-4">Tạo mã QR danh bạ (vCard có ảnh riêng)</h2>
             <div class="row">
                 <div class="col-md-6">
                     <form method="POST" enctype="multipart/form-data">
-                        <div class="mb-2"><input name="first_name" class="form-control" placeholder="Tên" required></div>
-                        <div class="mb-2"><input name="last_name" class="form-control" placeholder="Họ" required></div>
-                        <div class="mb-2"><input name="phone" class="form-control" placeholder="Số điện thoại" required></div>
-                        <div class="mb-2"><input name="email" class="form-control" placeholder="Email"></div>
-                        <div class="mb-2"><input name="org" class="form-control" placeholder="Công ty / tổ chức"></div>
-                        <div class="mb-2"><input name="title" class="form-control" placeholder="Chức danh"></div>
-                        <div class="mb-2"><input name="address" class="form-control" placeholder="Địa chỉ làm việc"></div>
-                        <div class="mb-3"><input type="file" name="photo" class="form-control" accept="image/*"></div>
+                        <input name="first_name" class="form-control mb-2" placeholder="Tên" required>
+                        <input name="last_name" class="form-control mb-2" placeholder="Họ" required>
+                        <input name="phone" class="form-control mb-2" placeholder="Số điện thoại" required>
+                        <input name="email" class="form-control mb-2" placeholder="Email">
+                        <input name="org" class="form-control mb-2" placeholder="Công ty / tổ chức">
+                        <input name="title" class="form-control mb-2" placeholder="Chức danh">
+                        <input name="address" class="form-control mb-2" placeholder="Địa chỉ làm việc">
+                        <input type="file" name="photo" class="form-control mb-3" accept="image/*">
                         <button type="submit" class="btn btn-primary">Tạo mã QR</button>
                         {% if qr_generated %}
-                        <a href="/download" class="btn btn-success ms-2">Tải về</a>
+                        <a href="/download" class="btn btn-success ms-2">Tải QR</a>
+                        <a href="/download-vcf" class="btn btn-secondary ms-2">Tải file vCard</a>
                         {% endif %}
                     </form>
                 </div>
                 <div class="col-md-6 text-center">
                     {% if qr_generated %}
-                        <p class="text-success mt-2">Quét mã QR bằng điện thoại để lưu danh bạ:</p>
+                        <p class="text-success mt-2">Quét mã QR để thêm danh bạ (không kèm ảnh)</p>
                         <img src="{{ qr_path }}" alt="QR Code" class="img-fluid shadow border rounded">
                     {% else %}
                         <p class="text-muted">Mã QR sẽ hiển thị tại đây sau khi bạn nhập thông tin và tải ảnh.</p>

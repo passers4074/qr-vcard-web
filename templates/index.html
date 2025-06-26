@@ -11,15 +11,30 @@
     <div class="row">
         <div class="col-md-6">
             <form method="POST" enctype="multipart/form-data">
-                <input name="first_name" class="form-control mb-2" placeholder="Tên" required>
-                <input name="last_name" class="form-control mb-2" placeholder="Họ" required>
-                <input name="phone" class="form-control mb-2" placeholder="Số điện thoại" required>
-                <input name="email" class="form-control mb-2" placeholder="Email">
-                <input name="org" class="form-control mb-2" placeholder="Công ty / tổ chức">
-                <input name="title" class="form-control mb-2" placeholder="Chức danh">
-                <input name="address" class="form-control mb-2" placeholder="Địa chỉ làm việc">
-                <input name="website" class="form-control mb-2" placeholder="Trang web cá nhân / công ty">
+                <input name="first_name" class="form-control mb-2" placeholder="Tên" 
+                       value="{{ request.form.first_name }}" required
+                       oninvalid="this.setCustomValidity('Vui lòng nhập tên')" oninput="setCustomValidity('')">
+
+                <input name="last_name" class="form-control mb-2" placeholder="Họ" 
+                       value="{{ request.form.last_name }}">
+
+                <input name="phone" class="form-control mb-2" placeholder="Số điện thoại" 
+                       value="{{ request.form.phone }}" required
+                       oninvalid="this.setCustomValidity('Vui lòng nhập số điện thoại')" oninput="setCustomValidity('')">
+
+                <input name="email" type="email" class="form-control mb-2" placeholder="Email" 
+                       value="{{ request.form.email }}" required
+                       oninvalid="this.setCustomValidity('Vui lòng nhập email hợp lệ')" oninput="setCustomValidity('')">
+
+                <input name="org" class="form-control mb-2" placeholder="Công ty / tổ chức" 
+                       value="{{ request.form.org }}" required
+                       oninvalid="this.setCustomValidity('Vui lòng nhập công ty / tổ chức')" oninput="setCustomValidity('')">
+
+                <input name="title" class="form-control mb-2" placeholder="Chức danh" value="{{ request.form.title }}">
+                <input name="address" class="form-control mb-2" placeholder="Địa chỉ làm việc" value="{{ request.form.address }}">
+                <input name="website" class="form-control mb-2" placeholder="Trang web" value="{{ request.form.website }}">
                 <input type="file" name="photo" class="form-control mb-3" accept="image/*">
+
                 <button type="submit" class="btn btn-primary">Tạo mã QR</button>
                 {% if qr_generated %}
                 <a href="/download?filename={{ qr_filename }}" class="btn btn-success ms-2">Tải QR</a>

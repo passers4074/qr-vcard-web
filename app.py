@@ -1,96 +1,92 @@
+import os
 from flask import Flask, render_template, request, send_file
 import qrcode
-from qrcode.constants import ERROR_CORRECT_M
-import os
-import base64
 from PIL import Image
+import base64
 from io import BytesIO
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-UPLOAD_FOLDER = 'static'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+UPLOAD_FOLDER = 'qr_vcard_web/static'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-def image_to_base64(image_file, max_width=240, max_height=240):
-    img = Image.open(image_file).convert('RGB')
-    img.thumbnail((max_width, max_height), Image.LANCZOS)
-    buffered = BytesIO()
-    img.save(buffered, format="JPEG", optimize=True, quality=70)
-    return base64.b64encode(buffered.getvalue()).decode()
+def create_vcard(data, photo_b64=None):
+    vcard = "BEGIN:VCARD\nVERSION:3.0\n"
+    vcard += f"N:{data.get('last_name', '')};{data['first_name']}\n"
+    vcard += f"FN:{data['first_name']} {data.get('last_name', '')}\n"
+    vcard += f"TEL:{data['phone']}\n"
+    vcard += f"EMAIL:{data['email']}\n"
+    vcard += f"ORG:{data['org']}\n"
 
-def generate_vcard(first_name, last_name, phone, email, org, title, address, website, photo_b64=None, for_qr=False):
-    vcard_lines = [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        f"N:{last_name};{first_name};;;",
-        f"FN:{first_name} {last_name}",
-    ]
-    if org:
-        vcard_lines.append(f"ORG:{org}")
-    if title:
-        vcard_lines.append(f"TITLE:{title}")
-    if phone:
-        vcard_lines.append(f"TEL;TYPE=CELL:{phone}")
-    if email:
-        vcard_lines.append(f"EMAIL:{email}")
-    if address:
-        vcard_lines.append(f"ADR;TYPE=WORK:;;{address}")
-    if website:
-        vcard_lines.append(f"URL:{website}")
-    if photo_b64 and not for_qr:
-        vcard_lines.append(f"PHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}")
-    vcard_lines.append("END:VCARD")
-    return "\n".join(vcard_lines)
+    if data.get('title'):
+        vcard += f"TITLE:{data['title']}\n"
+    if data.get('address'):
+        vcard += f"ADR:{data['address']}\n"
+    if data.get('website'):
+        vcard += f"URL:{data['website']}\n"
+    if photo_b64:
+        vcard += f"PHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}\n"
+
+    vcard += "END:VCARD"
+    return vcard
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        first_name = request.form['first_name']
-        last_name = request.form['last_name']
-        phone = request.form['phone']
-        email = request.form['email']
-        org = request.form['org']
-        title = request.form['title']
-        address = request.form['address']
-        website = request.form['website']
+        form = request.form
+        first_name = form.get('first_name', '').strip()
+        phone = form.get('phone', '').strip()
+        email = form.get('email', '').strip()
+        org = form.get('org', '').strip()
+
+        # Kiểm tra bắt buộc
+        if not all([first_name, phone, email, org]):
+            return "Các trường bắt buộc không được để trống", 400
+
+        # Xử lý ảnh nếu có
         photo_file = request.files.get('photo')
-
-        photo_b64 = ''
+        photo_b64 = None
         if photo_file and photo_file.filename:
-            try:
-                photo_b64 = image_to_base64(photo_file)
-            except Exception as e:
-                return f"Lỗi xử lý ảnh: {e}"
+            image = Image.open(photo_file)
+            image = image.convert("RGB")
+            image.thumbnail((300, 300))
+            buffer = BytesIO()
+            image.save(buffer, format="JPEG")
+            photo_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-        full_name = f"{first_name}_{last_name}".replace(" ", "_")
-        qr_filename = f"{full_name}_qr.png"
-        vcf_filename = f"{full_name}.vcf"
-        qr_path = os.path.join(UPLOAD_FOLDER, qr_filename)
-        vcf_path = os.path.join(UPLOAD_FOLDER, vcf_filename)
+        # Tạo vCard
+        vcard = create_vcard(form, photo_b64)
+        filename_base = secure_filename(first_name.lower().replace(" ", "_"))
 
-        vcard_for_qr = generate_vcard(first_name, last_name, phone, email, org, title, address, website, None, for_qr=True)
-        qr = qrcode.QRCode(version=None, error_correction=ERROR_CORRECT_M, box_size=10, border=4)
-        qr.add_data(vcard_for_qr.replace("\n", "\n"))  # giữ nguyên
-        qr.make(fit=True)
-        qr.make_image(fill_color="black", back_color="white").save(qr_path)
+        # Lưu file vCard
+        vcf_filename = f"{filename_base}.vcf"
+        vcf_path = os.path.join(app.config['UPLOAD_FOLDER'], vcf_filename)
+        with open(vcf_path, "w", encoding="utf-8") as f:
+            f.write(vcard)
 
-        vcard_with_photo = generate_vcard(first_name, last_name, phone, email, org, title, address, website, photo_b64)
-        with open(vcf_path, 'w', encoding='utf-8') as f:
-            f.write(vcard_with_photo.replace("\n", "\r\n"))
+        # Tạo QR
+        qr = qrcode.make(vcard)
+        qr_filename = f"{filename_base}_qr.png"
+        qr_path = os.path.join(app.config['UPLOAD_FOLDER'], qr_filename)
+        qr.save(qr_path)
 
-        return render_template('index.html', qr_path=qr_path, vcf_path=vcf_path, qr_generated=True,
-                               qr_filename=qr_filename, vcf_filename=vcf_filename)
+        return render_template("index.html",
+                               qr_generated=True,
+                               qr_path=f"/static/{qr_filename}",
+                               qr_filename=qr_filename,
+                               vcf_filename=vcf_filename)
 
-    return render_template('index.html', qr_generated=False)
+    return render_template("index.html", qr_generated=False)
 
-@app.route('/download')
+@app.route("/download")
 def download_qr():
-    filename = request.args.get("filename", "qr.png")
-    return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True, download_name=filename)
+    filename = request.args.get("filename")
+    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
 
-@app.route('/download-vcf')
+@app.route("/download-vcf")
 def download_vcf():
-    filename = request.args.get("filename", "contact.vcf")
-    return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True, download_name=filename)
+    filename = request.args.get("filename")
+    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True)

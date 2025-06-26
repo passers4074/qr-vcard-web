@@ -7,7 +7,6 @@ from PIL import Image
 from io import BytesIO
 
 app = Flask(__name__)
-
 UPLOAD_FOLDER = 'static'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -19,21 +18,28 @@ def image_to_base64(image_file, max_width=240, max_height=240):
     return base64.b64encode(buffered.getvalue()).decode()
 
 def generate_vcard(first_name, last_name, phone, email, org, title, address, website, photo_b64=None, for_qr=False):
-    vcard = f"""BEGIN:VCARD
-VERSION:3.0
-N:{last_name};{first_name};;;
-FN:{first_name} {last_name}
-ORG:{org}
-TITLE:{title}
-TEL;TYPE=CELL:{phone}
-EMAIL:{email}
-ADR;TYPE=WORK:;;{address}"""
+    vcard_lines = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        f"N:{last_name};{first_name};;;",
+        f"FN:{first_name} {last_name}",
+    ]
+    if org:
+        vcard_lines.append(f"ORG:{org}")
+    if title:
+        vcard_lines.append(f"TITLE:{title}")
+    if phone:
+        vcard_lines.append(f"TEL;TYPE=CELL:{phone}")
+    if email:
+        vcard_lines.append(f"EMAIL:{email}")
+    if address:
+        vcard_lines.append(f"ADR;TYPE=WORK:;;{address}")
     if website:
-        vcard += f"\\nURL:{website}"
+        vcard_lines.append(f"URL:{website}")
     if photo_b64 and not for_qr:
-        vcard += f"\\nPHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}"
-    vcard += "\\nEND:VCARD"
-    return vcard
+        vcard_lines.append(f"PHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}")
+    vcard_lines.append("END:VCARD")
+    return "\n".join(vcard_lines)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -58,25 +64,18 @@ def index():
         full_name = f"{first_name}_{last_name}".replace(" ", "_")
         qr_filename = f"{full_name}_qr.png"
         vcf_filename = f"{full_name}.vcf"
-
         qr_path = os.path.join(UPLOAD_FOLDER, qr_filename)
         vcf_path = os.path.join(UPLOAD_FOLDER, vcf_filename)
 
         vcard_for_qr = generate_vcard(first_name, last_name, phone, email, org, title, address, website, None, for_qr=True)
-        qr = qrcode.QRCode(
-            version=None,
-            error_correction=ERROR_CORRECT_M,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(vcard_for_qr)
+        qr = qrcode.QRCode(version=None, error_correction=ERROR_CORRECT_M, box_size=10, border=4)
+        qr.add_data(vcard_for_qr.replace("\n", "\n"))  # giữ nguyên
         qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        img.save(qr_path)
+        qr.make_image(fill_color="black", back_color="white").save(qr_path)
 
         vcard_with_photo = generate_vcard(first_name, last_name, phone, email, org, title, address, website, photo_b64)
         with open(vcf_path, 'w', encoding='utf-8') as f:
-            f.write(vcard_with_photo.replace("\\n", "\\r\\n"))
+            f.write(vcard_with_photo.replace("\n", "\r\n"))
 
         return render_template('index.html', qr_path=qr_path, vcf_path=vcf_path, qr_generated=True,
                                qr_filename=qr_filename, vcf_filename=vcf_filename)

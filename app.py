@@ -2,13 +2,14 @@ import os
 from flask import Flask, render_template, request, send_file
 import qrcode
 from PIL import Image
-import base64
 from io import BytesIO
+import base64
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-UPLOAD_FOLDER = 'static'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+UPLOAD_FOLDER = "static"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 def create_vcard(data, photo_b64=None):
     vcard = "BEGIN:VCARD\nVERSION:3.0\n"
@@ -31,16 +32,20 @@ def create_vcard(data, photo_b64=None):
     vcard += "END:VCARD"
     return vcard
 
-@app.route("/", methods=["GET", "POST"])
-def index():
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+@app.route("/vcard", methods=["GET", "POST"])
+def vcard():
     if request.method == "POST":
         form = request.form
         first_name = form.get("first_name", "").strip()
         if not first_name:
             return "Trường tên là bắt buộc.", 400
 
-        photo_file = request.files.get("photo")
         photo_b64 = None
+        photo_file = request.files.get("photo")
         if photo_file and photo_file.filename:
             image = Image.open(photo_file)
             image = image.convert("RGB")
@@ -53,35 +58,50 @@ def index():
         vcard_short = create_vcard(form)
 
         filename_base = secure_filename(first_name.lower().replace(" ", "_"))
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
         vcf_filename = f"{filename_base}.vcf"
-        vcf_path = os.path.join(app.config['UPLOAD_FOLDER'], vcf_filename)
-        with open(vcf_path, "w", encoding="utf-8") as f:
+        qr_filename = f"{filename_base}_qr.png"
+
+        with open(os.path.join(UPLOAD_FOLDER, vcf_filename), "w", encoding="utf-8") as f:
             f.write(vcard_full)
 
-        qr_filename = f"{filename_base}_qr.png"
-        qr_path = os.path.join(app.config['UPLOAD_FOLDER'], qr_filename)
-        qr = qrcode.make(vcard_short)
-        qr.save(qr_path)
+        qr_img = qrcode.make(vcard_short)
+        qr_img.save(os.path.join(UPLOAD_FOLDER, qr_filename))
 
-        return render_template("index.html",
-                               qr_generated=True,
+        return render_template("vcard.html", qr_generated=True,
                                qr_path=f"/static/{qr_filename}",
                                qr_filename=qr_filename,
                                vcf_filename=vcf_filename)
 
-    return render_template("index.html", qr_generated=False)
+    return render_template("vcard.html", qr_generated=False)
+
+@app.route("/link", methods=["GET", "POST"])
+def qr_link():
+    if request.method == "POST":
+        url = request.form.get("url", "").strip()
+        if not url:
+            return "Trường đường link là bắt buộc.", 400
+
+        info = request.form.get("info", "").strip()
+        filename_base = secure_filename((info or "qr_link").lower().replace(" ", "_"))
+        qr_filename = f"{filename_base}_qr.png"
+        qr_img = qrcode.make(url)
+        qr_img.save(os.path.join(UPLOAD_FOLDER, qr_filename))
+
+        return render_template("link.html", qr_generated=True,
+                               qr_path=f"/static/{qr_filename}",
+                               qr_filename=qr_filename)
+
+    return render_template("link.html", qr_generated=False)
 
 @app.route("/download")
 def download_qr():
     filename = request.args.get("filename")
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
+    return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
 
 @app.route("/download-vcf")
 def download_vcf():
     filename = request.args.get("filename")
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
+    return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

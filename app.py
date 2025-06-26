@@ -40,7 +40,7 @@ def index():
         org = form.get('org', '').strip()
 
         if not all([first_name, phone, email, org]):
-            return "Các trường bắt buộc không được để trống", 400
+            return "Tên, điện thoại, email và công ty là bắt buộc.", 400
 
         photo_file = request.files.get('photo')
         photo_b64 = None
@@ -52,17 +52,18 @@ def index():
             image.save(buffer, format="JPEG")
             photo_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-        vcard = create_vcard(form, photo_b64)
-        filename_base = secure_filename(first_name.lower().replace(" ", "_"))
+        vcard_full = create_vcard(form, photo_b64)
+        vcard_short = create_vcard(form)  # Không ảnh để QR không quá dài
 
+        filename_base = secure_filename(first_name.lower().replace(" ", "_"))
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
         vcf_filename = f"{filename_base}.vcf"
         vcf_path = os.path.join(app.config['UPLOAD_FOLDER'], vcf_filename)
         with open(vcf_path, "w", encoding="utf-8") as f:
-            f.write(vcard)
+            f.write(vcard_full)
 
-        qr = qrcode.make(vcard)
+        qr = qrcode.make(vcard_short)
         qr_filename = f"{filename_base}_qr.png"
         qr_path = os.path.join(app.config['UPLOAD_FOLDER'], qr_filename)
         qr.save(qr_path)

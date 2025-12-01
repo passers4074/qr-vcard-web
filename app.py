@@ -4,7 +4,9 @@ import qrcode
 from PIL import Image
 from io import BytesIO
 import base64
+import urllib.parse
 from werkzeug.utils import secure_filename
+
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "static"
@@ -92,6 +94,35 @@ def qr_link():
                                qr_filename=qr_filename)
 
     return render_template("link.html", qr_generated=False)
+
+@app.route("/email", methods=["GET", "POST"])
+def qrcode_email():
+    if request.method == "POST":
+        email = request.form.get("email")
+        info = request.form.get("info") or ""
+
+        if not email:
+            return render_template("qrcode_email.html", error="Email là bắt buộc!")
+
+        # Mã hoá tham số
+        subject = urllib.parse.quote("Thông tin từ QR")
+        body = urllib.parse.quote(info)
+
+        # Tạo link mailto:
+        if info:
+            mailto_link = f"mailto:{email}?subject={subject}&body={body}"
+        else:
+            mailto_link = f"mailto:{email}"
+
+        # Tạo QR Code
+        qr = qrcode.make(mailto_link)
+        img_io = BytesIO()
+        qr.save(img_io, "PNG")
+        img_io.seek(0)
+
+        return send_file(img_io, mimetype="image/png")
+
+    return render_template("qrcode_email.html")
 
 @app.route("/download")
 def download_qr():

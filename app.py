@@ -13,24 +13,38 @@ UPLOAD_FOLDER = "static"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
+# -----------------------------
+# TẠO VCARD (CÓ 2 EMAIL)
+# -----------------------------
 def create_vcard(data, photo_b64=None):
     vcard = "BEGIN:VCARD\nVERSION:3.0\n"
     vcard += f"N:{data.get('last_name', '')};{data['first_name']}\n"
     vcard += f"FN:{data['first_name']} {data.get('last_name', '')}\n"
+    # Phone
     if data.get("phone"):
         vcard += f"TEL:{data['phone']}\n"
+    # Email 1
     if data.get("email"):
         vcard += f"EMAIL:{data['email']}\n"
+    # Email 2 (email2)
+    if data.get("email2"):
+        vcard += f"EMAIL:{data['email2']}\n"
+    # Org
     if data.get("org"):
         vcard += f"ORG:{data['org']}\n"
+    # Title
     if data.get("title"):
         vcard += f"TITLE:{data['title']}\n"
+    # Address
     if data.get("address"):
         vcard += f"ADR:{data['address']}\n"
+    # Website
     if data.get("website"):
         vcard += f"URL:{data['website']}\n"
+    # Image
     if photo_b64:
         vcard += f"PHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}\n"
+    
     vcard += "END:VCARD"
     return vcard
 
@@ -38,14 +52,20 @@ def create_vcard(data, photo_b64=None):
 def home():
     return render_template("index.html")
 
+# -----------------------------
+# TRANG VCARD
+# -----------------------------
 @app.route("/vcard", methods=["GET", "POST"])
 def vcard():
     if request.method == "POST":
         form = request.form
+
+        # Trường bắt buộc
         first_name = form.get("first_name", "").strip()
         if not first_name:
             return "Trường tên là bắt buộc.", 400
 
+        # Xử lý hình ảnh
         photo_b64 = None
         photo_file = request.files.get("photo")
         if photo_file and photo_file.filename:
@@ -56,26 +76,33 @@ def vcard():
             image.save(buffer, format="JPEG")
             photo_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-        vcard_full = create_vcard(form, photo_b64)
-        vcard_short = create_vcard(form)
+        # 2 phiên bản vCard
+        vcard_full = create_vcard(form, photo_b64)  # có ảnh
+        vcard_short = create_vcard(form)            # không ảnh (để nhúng vào QR)
 
         filename_base = secure_filename(first_name.lower().replace(" ", "_"))
         vcf_filename = f"{filename_base}.vcf"
         qr_filename = f"{filename_base}_qr.png"
 
+        # Xuất file VCF
         with open(os.path.join(UPLOAD_FOLDER, vcf_filename), "w", encoding="utf-8") as f:
             f.write(vcard_full)
 
+        # Tạo QR từ vCard không ảnh
         qr_img = qrcode.make(vcard_short)
         qr_img.save(os.path.join(UPLOAD_FOLDER, qr_filename))
 
-        return render_template("vcard.html", qr_generated=True,
+        return render_template("vcard.html",
+                               qr_generated=True,
                                qr_path=f"/static/{qr_filename}",
                                qr_filename=qr_filename,
                                vcf_filename=vcf_filename)
 
     return render_template("vcard.html", qr_generated=False)
 
+# -----------------------------
+# QR LINK
+# -----------------------------
 @app.route("/link", methods=["GET", "POST"])
 def qr_link():
     if request.method == "POST":
@@ -89,12 +116,16 @@ def qr_link():
         qr_img = qrcode.make(url)
         qr_img.save(os.path.join(UPLOAD_FOLDER, qr_filename))
 
-        return render_template("link.html", qr_generated=True,
+        return render_template("link.html",
+                               qr_generated=True,
                                qr_path=f"/static/{qr_filename}",
                                qr_filename=qr_filename)
 
     return render_template("link.html", qr_generated=False)
 
+# -----------------------------
+# QR EMAIL
+# -----------------------------
 @app.route("/email", methods=["GET", "POST"])
 def qrcode_email():
     if request.method == "POST":
@@ -109,10 +140,7 @@ def qrcode_email():
         body = urllib.parse.quote(info)
 
         # Tạo link mailto:
-        if info:
-            mailto_link = f"mailto:{email}?subject={subject}&body={body}"
-        else:
-            mailto_link = f"mailto:{email}"
+        mailto_link = f"mailto:{email}?subject={subject}&body={body}" if info else f"mailto:{email}"
 
         # Tạo QR Code
         qr = qrcode.make(mailto_link)
@@ -124,6 +152,9 @@ def qrcode_email():
 
     return render_template("email.html")
 
+# -----------------------------
+# TẢI FILE
+# -----------------------------
 @app.route("/download")
 def download_qr():
     filename = request.args.get("filename")
@@ -134,6 +165,9 @@ def download_vcf():
     filename = request.args.get("filename")
     return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
 
+# -----------------------------
+# RUN APP
+# -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)

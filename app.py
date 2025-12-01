@@ -102,7 +102,7 @@ def qrcode_email():
         info = request.form.get("info") or ""
 
         if not email:
-            return render_template("qrcode_email.html", error="Email là bắt buộc!")
+            return render_template("email.html", error="Email là bắt buộc!")
 
         # Mã hoá tham số
         subject = urllib.parse.quote("Thông tin từ QR")
@@ -122,7 +122,7 @@ def qrcode_email():
 
         return send_file(img_io, mimetype="image/png")
 
-    return render_template("qrcode_email.html")
+    return render_template("email.html")
 
 @app.route("/download")
 def download_qr():

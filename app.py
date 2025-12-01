@@ -1,108 +1,107 @@
-import os
+
 from flask import Flask, render_template, request, send_file
 import qrcode
-from PIL import Image
 from io import BytesIO
-import base64
-from werkzeug.utils import secure_filename
+import urllib.parse
+import os
 
 app = Flask(__name__)
-UPLOAD_FOLDER = "static"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-
-def create_vcard(data, photo_b64=None):
-    vcard = "BEGIN:VCARD\nVERSION:3.0\n"
-    vcard += f"N:{data.get('last_name', '')};{data['first_name']}\n"
-    vcard += f"FN:{data['first_name']} {data.get('last_name', '')}\n"
-    if data.get("phone"):
-        vcard += f"TEL:{data['phone']}\n"
-    if data.get("email"):
-        vcard += f"EMAIL:{data['email']}\n"
-    if data.get("org"):
-        vcard += f"ORG:{data['org']}\n"
-    if data.get("title"):
-        vcard += f"TITLE:{data['title']}\n"
-    if data.get("address"):
-        vcard += f"ADR:{data['address']}\n"
-    if data.get("website"):
-        vcard += f"URL:{data['website']}\n"
-    if photo_b64:
-        vcard += f"PHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}\n"
-    vcard += "END:VCARD"
-    return vcard
 
 @app.route("/")
 def home():
     return render_template("index.html")
 
-@app.route("/vcard", methods=["GET", "POST"])
-def vcard():
+# QRcode-Vcard (Tên bắt buộc)
+@app.route("/qrcode-vcard", methods=["GET", "POST"])
+def qrcode_vcard():
     if request.method == "POST":
-        form = request.form
-        first_name = form.get("first_name", "").strip()
-        if not first_name:
-            return "Trường tên là bắt buộc.", 400
+        name = request.form.get("name", "").strip()
+        if not name:
+            return render_template("qrcode_vcard.html", error="Tên là bắt buộc")
 
-        photo_b64 = None
-        photo_file = request.files.get("photo")
-        if photo_file and photo_file.filename:
-            image = Image.open(photo_file)
-            image = image.convert("RGB")
-            image.thumbnail((300, 300))
-            buffer = BytesIO()
-            image.save(buffer, format="JPEG")
-            photo_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        phone = request.form.get("phone", "")
+        email = request.form.get("email", "")
+        company = request.form.get("company", "")
+        lastname = request.form.get("lastname", "")
+        title = request.form.get("title", "")
+        address = request.form.get("address", "")
+        website = request.form.get("website", "")
+        photo = request.files.get("photo")
 
-        vcard_full = create_vcard(form, photo_b64)
-        vcard_short = create_vcard(form)
+        vcard = "BEGIN:VCARD\nVERSION:3.0\n"
+        vcard += f"N:{lastname};{name};;;\n"
+        vcard += f"FN:{name}\n"
+        if phone: vcard += f"TEL;TYPE=CELL:{phone}\n"
+        if email: vcard += f"EMAIL:{email}\n"
+        if company: vcard += f"ORG:{company}\n"
+        if title: vcard += f"TITLE:{title}\n"
+        if address: vcard += f"ADR:{address}\n"
+        if website: vcard += f"URL:{website}\n"
 
-        filename_base = secure_filename(first_name.lower().replace(" ", "_"))
-        vcf_filename = f"{filename_base}.vcf"
-        qr_filename = f"{filename_base}_qr.png"
+        photo_path = None
+        if photo:
+            photo_path = os.path.join("static", photo.filename)
+            full_path = os.path.join(app.root_path, photo_path)
+            photo.save(full_path)
+            vcard += f"PHOTO;VALUE=URI:{photo_path}\n"
 
-        with open(os.path.join(UPLOAD_FOLDER, vcf_filename), "w", encoding="utf-8") as f:
-            f.write(vcard_full)
+        vcard += "END:VCARD"
 
-        qr_img = qrcode.make(vcard_short)
-        qr_img.save(os.path.join(UPLOAD_FOLDER, qr_filename))
+        vcf_path = os.path.join(static, f"{name}.vcf")
+        full_vcf = os.path.join(app.root_path, vcf_path)
+        with open(full_vcf, "w", encoding="utf-8") as f:
+            f.write(vcard)
 
-        return render_template("vcard.html", qr_generated=True,
-                               qr_path=f"/static/{qr_filename}",
-                               qr_filename=qr_filename,
-                               vcf_filename=vcf_filename)
+        qr_img = qrcode.make(f"https://your-domain.com/{vcf_path}")
+        buf = BytesIO()
+        qr_img.save(buf, "PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype="image/png", download_name="qrcode_vcard.png")
 
-    return render_template("vcard.html", qr_generated=False)
+    return render_template("qrcode_vcard.html", error=None)
 
-@app.route("/link", methods=["GET", "POST"])
-def qr_link():
+# QRcode-Link
+@app.route("/qrcode-link", methods=["GET", "POST"])
+def qrcode_link():
     if request.method == "POST":
-        url = request.form.get("url", "").strip()
-        if not url:
-            return "Trường đường link là bắt buộc.", 400
-
+        link = request.form.get("link", "").strip()
         info = request.form.get("info", "").strip()
-        filename_base = secure_filename((info or "qr_link").lower().replace(" ", "_"))
-        qr_filename = f"{filename_base}_qr.png"
-        qr_img = qrcode.make(url)
-        qr_img.save(os.path.join(UPLOAD_FOLDER, qr_filename))
+        if not link:
+            return render_template("qrcode_link.html", error="Đường link là bắt buộc")
 
-        return render_template("link.html", qr_generated=True,
-                               qr_path=f"/static/{qr_filename}",
-                               qr_filename=qr_filename)
+        qr_text = link if not info else f"{info}: {link}"
+        qr_img = qrcode.make(qr_text)
+        buf = BytesIO()
+        qr_img.save(buf, "PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype="image/png", download_name="qrcode_link.png")
 
-    return render_template("link.html", qr_generated=False)
+    return render_template("qrcode_link.html", error=None)
 
-@app.route("/download")
-def download_qr():
-    filename = request.args.get("filename")
-    return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
+# QRcode-Email
+@app.route("/qrcode-email", methods=["GET", "POST"])
+def qrcode_email():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        info = request.form.get("info", "").strip()
 
-@app.route("/download-vcf")
-def download_vcf():
-    filename = request.args.get("filename")
-    return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
+        if not email:
+            return render_template("qrcode_email.html", error="Email là bắt buộc")
+
+        if info:
+            subject = urllib.parse.quote("Thông tin từ QR")
+            body = urllib.parse.quote(info)
+            mailto = f"mailto:{email}?subject={subject}&body={body}"
+        else:
+            mailto = f"mailto:{email}"
+
+        qr_img = qrcode.make(mailto)
+        buf = BytesIO()
+        qr_img.save(buf, "PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype="image/png", download_name="qrcode_email.png")
+
+    return render_template("qrcode_email.html", error=None)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host="0.0.0.0", port=port)
+    app.run(debug=True)
